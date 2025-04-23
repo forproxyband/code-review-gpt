@@ -1,4 +1,3 @@
-
 name: 'Code Review GPT Action'
 description: 'Выполняет автоматический code review с использованием GPT и интеграцией с JIRA'
 
@@ -57,20 +56,52 @@ runs:
 
         echo "TARGET_BRANCH=$TARGET_BRANCH_FROM_EVENT" >> $GITHUB_ENV
 
+    - name: Check if target branch exists
+      shell: bash
+      run: |
+        # Проверяем существование целевой ветки
+        if ! git ls-remote --heads origin "$TARGET_BRANCH" | grep -q "refs/heads/$TARGET_BRANCH"; then
+          echo "Ветка $TARGET_BRANCH не существует. Используем master или первую доступную ветку."
+          
+          # Проверяем существование ветки master
+          if git ls-remote --heads origin master | grep -q "refs/heads/master"; then
+            echo "Найдена ветка master. Используем её."
+            echo "TARGET_BRANCH=master" >> $GITHUB_ENV
+          else
+            # Получаем список всех веток и берем первую
+            FIRST_BRANCH=$(git ls-remote --heads origin | grep "refs/heads/" | head -n 1 | sed 's/.*refs\/heads\///')
+            if [ -n "$FIRST_BRANCH" ]; then
+              echo "Используем первую доступную ветку: $FIRST_BRANCH"
+              echo "TARGET_BRANCH=$FIRST_BRANCH" >> $GITHUB_ENV
+            else
+              echo "Не найдено ни одной ветки. Используем текущий коммит."
+              echo "TARGET_BRANCH=HEAD" >> $GITHUB_ENV
+            fi
+          fi
+        fi
+
     - name: Set BASE_SHA
       shell: bash
       run: |
         if [ "${{ github.event_name }}" = "pull_request" ]; then
           echo "BASE_SHA=${{ github.event.pull_request.base.sha }}" >> $GITHUB_ENV
         else
-          BASE_SHA=$(git merge-base origin/$TARGET_BRANCH HEAD)
-          CURRENT_SHA=$(git rev-parse HEAD)
-          echo "BASE_SHA = $BASE_SHA / CURRENT_SHA = $CURRENT_SHA"
-        
-          if [ "$BASE_SHA" = "$CURRENT_SHA" ]; then
+          # Если TARGET_BRANCH = HEAD, используем предыдущий коммит
+          if [ "$TARGET_BRANCH" = "HEAD" ]; then
             echo "BASE_SHA=$(git rev-parse HEAD~1)" >> $GITHUB_ENV
           else
-            echo "BASE_SHA=$BASE_SHA" >> $GITHUB_ENV
+            BASE_SHA=$(git merge-base origin/$TARGET_BRANCH HEAD || echo "")
+            CURRENT_SHA=$(git rev-parse HEAD)
+            echo "BASE_SHA = $BASE_SHA / CURRENT_SHA = $CURRENT_SHA"
+          
+            if [ -z "$BASE_SHA" ]; then
+              echo "Не удалось найти общий предок. Используем предыдущий коммит."
+              echo "BASE_SHA=$(git rev-parse HEAD~1)" >> $GITHUB_ENV
+            elif [ "$BASE_SHA" = "$CURRENT_SHA" ]; then
+              echo "BASE_SHA=$(git rev-parse HEAD~1)" >> $GITHUB_ENV
+            else
+              echo "BASE_SHA=$BASE_SHA" >> $GITHUB_ENV
+            fi
           fi
         fi
 
@@ -118,8 +149,8 @@ runs:
       shell: bash
       run: |
         echo '{
-          "body": "'"${REVIEW_RESULT}"'\n
-          [✨ Детальная информация|'"${COMMENT_URL}"']"
+          "body": "'"${REVIEW_RESULT}"'\n[✨ Детальная информация|'"${COMMENT_URL}"']",
+          "properties": {"key": "value"}
         }' > comment.json
 
         curl --request POST \
