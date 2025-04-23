@@ -30,6 +30,8 @@ export const defaultLanguageMap: { [key: string]: string } = {
   '.tf': 'Terraform',
   '.hcl': 'Terraform',
   '.swift': 'Swift',
+  ".yaml": "YAML",
+  ".yml": "YAML"
 };
 
 export const languageMap: { [key: string]: string } = {

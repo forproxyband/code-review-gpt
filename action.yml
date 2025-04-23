@@ -1,43 +1,137 @@
-name: 'Code Review GPT'
-description: 'Reviews PR changes with a GPT model from OpenAI'
-author: 'Orion Tools'
+
+name: 'Code Review GPT Action'
+description: 'Выполняет автоматический code review с использованием GPT и интеграцией с JIRA'
+
 inputs:
-  MODEL:
-    description: 'Model name to use for review'
-    required: true
-    default: 'gpt-4o'
-  REVIEW_LANGUAGE:
-    description: 'Target natural language for translation'
+  target_branch:
+    description: 'Целевая ветка для сравнения (по умолчанию main)'
     required: false
-    default: 'English'
-  OPENAI_API_KEY:
+    default: 'main'
+  openai_api_key:
     description: 'OpenAI API Key'
     required: true
-  GITHUB_TOKEN:
-    description: 'Github token'
-    required: true
-  OPENAI_BASE_URL:
-    description: 'OpenAI API Base URL'
+  jira_token:
+    description: 'JIRA API Token'
     required: false
+  jira_user:
+    description: 'JIRA User'
+    required: false
+  jira_base_url:
+    description: 'JIRA Base URL'
+    required: false
+  github_token:
+    description: 'GitHub Token для доступа к PR'
+    required: true
+
+
+outputs:
+  review_result:
+    description: 'Результат code review'
+    value: ${{ steps.code_review.outputs.review_result }}
+  jira_result:
+    description: 'Форматированный результат для JIRA'
+    value: ${{ steps.code_review.outputs.jira_result }}
+  comment_url:
+    description: 'URL комментария с ревью'
+    value: ${{ steps.code_review.outputs.comment_url }}
+
 runs:
   using: 'composite'
   steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - name: Resolve TARGET_BRANCH
+      shell: bash
+      run: |
+        if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
+          TARGET_BRANCH_FROM_EVENT="${{ github.event.client_payload.target_branch }}"
+        else
+          TARGET_BRANCH_FROM_EVENT="${{ inputs.target_branch }}"
+        fi
+
+        if [ -z "$TARGET_BRANCH_FROM_EVENT" ]; then
+          TARGET_BRANCH_FROM_EVENT="main"
+        fi
+
+        echo "TARGET_BRANCH=$TARGET_BRANCH_FROM_EVENT" >> $GITHUB_ENV
+
+    - name: Set BASE_SHA
+      shell: bash
+      run: |
+        if [ "${{ github.event_name }}" = "pull_request" ]; then
+          echo "BASE_SHA=${{ github.event.pull_request.base.sha }}" >> $GITHUB_ENV
+        else
+          BASE_SHA=$(git merge-base origin/$TARGET_BRANCH HEAD)
+          CURRENT_SHA=$(git rev-parse HEAD)
+          echo "BASE_SHA = $BASE_SHA / CURRENT_SHA = $CURRENT_SHA"
+        
+          if [ "$BASE_SHA" = "$CURRENT_SHA" ]; then
+            echo "BASE_SHA=$(git rev-parse HEAD~1)" >> $GITHUB_ENV
+          else
+            echo "BASE_SHA=$BASE_SHA" >> $GITHUB_ENV
+          fi
+        fi
+
     - uses: oven-sh/setup-bun@v2
       with:
         bun-version: latest
-    
+
     - name: Install and Run Code Review GPT
+      id: code_review
       shell: bash
       run: |
-        bun add code-review-gpt@latest
-        bun code-review-gpt review --ci=github --model=$MODEL --reviewLanguage=$REVIEW_LANGUAGE
+        git clone https://github.com/forproxyband/code-review-gpt.git
+        cd code-review-gpt
+        rm -rf .git
+        bun install
+        bun run review --ci=github --modelString=openai:gpt-4o --reviewLanguage=Russian --reviewType=changed
       env:
-        MODEL: ${{ inputs.MODEL }}
-        REVIEW_LANGUAGE: ${{ inputs.REVIEW_LANGUAGE }}
-        OPENAI_API_KEY: ${{ inputs.OPENAI_API_KEY }}
-        BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        GITHUB_TOKEN: ${{ inputs.GITHUB_TOKEN }}
-        OPENAI_BASE_URL: ${{ inputs.OPENAI_BASE_URL }}
+        OPENAI_API_KEY: ${{ inputs.openai_api_key }}
+        BASE_SHA: ${{ env.BASE_SHA }}
+        GITHUB_TOKEN: ${{ inputs.github_token }}
+
+    - name: Extract JIRA ticket
+      shell: bash
+      run: |
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          RUN_TITLE="${{ github.event.workflow.name }} ${{ github.run_number }}"
+          JIRA_TICKET=$(echo $RUN_TITLE | grep -oP '[A-Z]+-\d+' || echo "")
+        elif [ "${{ github.event_name }}" = "pull_request" ]; then
+          TITLE="${{ github.event.pull_request.title }}"
+          JIRA_TICKET=$(echo $TITLE | grep -oP '[A-Z]+-\d+' || echo "")
+        else
+          COMMIT_MSG=$(git log -1 --pretty=%B)
+          JIRA_TICKET=$(echo $COMMIT_MSG | grep -oP '[A-Z]+-\d+' || echo "")
+        fi
+        
+        if [ -n "$JIRA_TICKET" ]; then
+          echo "Найден код задачи JIRA: $JIRA_TICKET"
+          echo "JIRA_TICKET=$JIRA_TICKET" >> $GITHUB_ENV
+        else
+          echo "Код задачи JIRA не найден"
+        fi
+
+    - name: Comment to JIRA
+      if: env.JIRA_TICKET != '' && inputs.jira_token != ''
+      shell: bash
+      run: |
+        echo '{
+          "body": "'"${REVIEW_RESULT}"'\n
+          [✨ Детальная информация|'"${COMMENT_URL}"']"
+        }' > comment.json
+
+        curl --request POST \
+          --user "${{ inputs.jira_user }}:${{ inputs.jira_token }}" \
+          --header "Accept: application/json" \
+          --header "Content-Type: application/json" \
+          --url "${{ inputs.jira_base_url }}/rest/api/2/issue/${JIRA_TICKET}/comment" \
+          -d @comment.json
+      env:
+        REVIEW_RESULT: ${{ steps.code_review.outputs.jira_result }}
+        GITHUB_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        COMMENT_URL: ${{ steps.code_review.outputs.comment_url }}
 
 branding:
   icon: 'code'
