@@ -3,9 +3,9 @@ description: 'Выполняет автоматический code review с и�
 
 inputs:
   target_branch:
-    description: 'Целевая ветка для сравнения (по умолчанию main)'
+    description: 'Целевая ветка для сравнения (по умолчанию текущая ветка)'
     required: false
-    default: 'main'
+    default: ''
   openai_api_key:
     description: 'OpenAI API Key'
     required: true
@@ -59,7 +59,7 @@ runs:
         fi
 
         if [ -z "$TARGET_BRANCH_FROM_EVENT" ]; then
-          TARGET_BRANCH_FROM_EVENT="main"
+          TARGET_BRANCH_FROM_EVENT="$CURRENT_BRANCH"
         fi
 
         echo "TARGET_BRANCH=$TARGET_BRANCH_FROM_EVENT" >> $GITHUB_ENV
