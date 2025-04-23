@@ -143,8 +143,7 @@ runs:
       shell: bash
       run: |
         echo '{
-          "body": "'"${REVIEW_RESULT}"'\n[✨ Детальная информация|'"${COMMENT_URL}"']",
-          "properties": {"key": "value"}
+          "body": "'"${REVIEW_RESULT}"'\n[✨ Детальная информация|'"${COMMENT_URL}"']"
         }' > comment.json
 
         curl --request POST \
