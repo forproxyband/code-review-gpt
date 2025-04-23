@@ -26,7 +26,7 @@ on:
   workflow_dispatch:
     inputs:
       target_branch:
-        description: "Целевая ветка для сравнения (по умолчанию main)"
+        description: "Целевая ветка для сравнения (по умолчанию текущая)"
         required: false
   # Запуск через внешний webhook
   repository_dispatch:
