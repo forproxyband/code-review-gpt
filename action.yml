@@ -41,6 +41,14 @@ runs:
       with:
         fetch-depth: 0
 
+    - name: Get current branch
+      shell: bash
+      run: |
+        # Получаем текущую ветку
+        CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+        echo "Текущая ветка: $CURRENT_BRANCH"
+        echo "CURRENT_BRANCH=$CURRENT_BRANCH" >> $GITHUB_ENV
+
     - name: Resolve TARGET_BRANCH
       shell: bash
       run: |
@@ -61,23 +69,8 @@ runs:
       run: |
         # Проверяем существование целевой ветки
         if ! git ls-remote --heads origin "$TARGET_BRANCH" | grep -q "refs/heads/$TARGET_BRANCH"; then
-          echo "Ветка $TARGET_BRANCH не существует. Используем master или первую доступную ветку."
-          
-          # Проверяем существование ветки master
-          if git ls-remote --heads origin master | grep -q "refs/heads/master"; then
-            echo "Найдена ветка master. Используем её."
-            echo "TARGET_BRANCH=master" >> $GITHUB_ENV
-          else
-            # Получаем список всех веток и берем первую
-            FIRST_BRANCH=$(git ls-remote --heads origin | grep "refs/heads/" | head -n 1 | sed 's/.*refs\/heads\///')
-            if [ -n "$FIRST_BRANCH" ]; then
-              echo "Используем первую доступную ветку: $FIRST_BRANCH"
-              echo "TARGET_BRANCH=$FIRST_BRANCH" >> $GITHUB_ENV
-            else
-              echo "Не найдено ни одной ветки. Используем текущий коммит."
-              echo "TARGET_BRANCH=HEAD" >> $GITHUB_ENV
-            fi
-          fi
+          echo "Ветка $TARGET_BRANCH не существует. Используем текущую ветку $CURRENT_BRANCH."
+          echo "TARGET_BRANCH=$CURRENT_BRANCH" >> $GITHUB_ENV
         fi
 
     - name: Set BASE_SHA
@@ -86,8 +79,9 @@ runs:
         if [ "${{ github.event_name }}" = "pull_request" ]; then
           echo "BASE_SHA=${{ github.event.pull_request.base.sha }}" >> $GITHUB_ENV
         else
-          # Если TARGET_BRANCH = HEAD, используем предыдущий коммит
-          if [ "$TARGET_BRANCH" = "HEAD" ]; then
+          # Если целевая ветка - текущая, используем предыдущий коммит
+          if [ "$TARGET_BRANCH" = "$CURRENT_BRANCH" ]; then
+            echo "Целевая ветка совпадает с текущей. Используем предыдущий коммит."
             echo "BASE_SHA=$(git rev-parse HEAD~1)" >> $GITHUB_ENV
           else
             BASE_SHA=$(git merge-base origin/$TARGET_BRANCH HEAD || echo "")
