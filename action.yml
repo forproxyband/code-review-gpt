@@ -139,7 +139,7 @@ runs:
         fi
 
     - name: Comment to JIRA
-      if: env.JIRA_TICKET != '' && inputs.jira_token != ''
+      if: env.JIRA_TICKET != '' && inputs.jira_token != '' && steps.code_review.outputs.comment_url != ''
       shell: bash
       run: |
         echo '{
