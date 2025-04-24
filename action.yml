@@ -138,28 +138,28 @@ runs:
           echo "Код задачи JIRA не найден"
         fi
 
-    - name: Check required conditions
-      shell: bash
-      run: |
-        # Проверяем наличие кода задачи JIRA
-        if [ -z "$JIRA_TICKET" ]; then
-          echo "::error::Код задачи JIRA не найден. Прерываем выполнение."
-          exit 1
-        fi
+    # - name: Check required conditions
+    #   shell: bash
+    #   run: |
+    #     # Проверяем наличие кода задачи JIRA
+    #     if [ -z "$JIRA_TICKET" ]; then
+    #       echo "::error::Код задачи JIRA не найден. Прерываем выполнение."
+    #       exit 1
+    #     fi
         
-        # Проверяем наличие токена JIRA
-        if [ -z "${{ inputs.jira_token }}" ]; then
-          echo "::error::Токен JIRA не указан. Прерываем выполнение."
-          exit 1
-        fi
+    #     # Проверяем наличие токена JIRA
+    #     if [ -z "${{ inputs.jira_token }}" ]; then
+    #       echo "::error::Токен JIRA не указан. Прерываем выполнение."
+    #       exit 1
+    #     fi
         
-        # Проверяем наличие URL комментария
-        if [ -z "${{ steps.code_review.outputs.comment_url }}" ]; then
-          echo "::error::URL комментария не найден. Прерываем выполнение."
-          exit 1
-        fi
+    #     # Проверяем наличие URL комментария
+    #     if [ -z "${{ steps.code_review.outputs.comment_url }}" ]; then
+    #       echo "::error::URL комментария не найден. Прерываем выполнение."
+    #       exit 1
+    #     fi
         
-        echo "Все необходимые условия выполнены. Продолжаем выполнение."
+    #     echo "Все необходимые условия выполнены. Продолжаем выполнение."
 
     - name: Comment to JIRA
       if: env.JIRA_TICKET != '' && inputs.jira_token != '' && steps.code_review.outputs.comment_url != ''
