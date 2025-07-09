@@ -111,7 +111,7 @@ runs:
         cd code-review-gpt
         rm -rf .git
         bun install
-        bun run review --ci=github --modelString=openai:gpt-4o --reviewLanguage=Russian --reviewType=changed
+        bun run review --ci=github --modelString=openai:gpt-4.1 --reviewLanguage=Russian --reviewType=changed
       env:
         OPENAI_API_KEY: ${{ inputs.openai_api_key }}
         BASE_SHA: ${{ env.BASE_SHA }}
