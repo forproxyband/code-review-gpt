@@ -18,6 +18,10 @@ export const modelInfo = [
     maxPromptLength: 300000, //128k tokens
   },
   {
+    model: 'openai:gpt-4.1',
+    maxPromptLength: 2400000, //1024k tokens (1M context window)
+  },
+  {
     model: 'openai:gpt-4-turbo',
     maxPromptLength: 300000, //128k tokens
   },
